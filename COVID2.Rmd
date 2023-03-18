@@ -1,0 +1,547 @@
+---
+title: "COVID 2"
+author: "Juan Daniel, Paddy Kinch, Luis Echeverri"
+date: "3/22/2022"
+output: pdf_document
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+<!--# Comment -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(knitr)
+library(readxl)
+library(VIM)
+library(tidyverse)
+library(GGally)
+library(DT)
+library(rpivotTable)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(openintro)
+library(highcharter)
+library(ggpubr)
+library(scales)
+library(lavaan)
+library(kableExtra)
+library(semPlot)
+library(ggvis)
+library(plm)
+library(ggpmisc)
+library(psych)
+```
+
+```{r data, include=FALSE}
+d = read.csv("C:/Users/danie/OneDrive - UPF-BSM/2. Second Term/Marketing Research/Final Case/owid-covid-data.csv")
+```
+
+[Data
+Source](https://github.com/owid/covid-19-data/tree/master/public/data)
+
+### Abstract
+
+*The novel Coronavirus became a global pandemic in early 2020 and
+governments worldwide were tasked with understanding how to emerge from
+the pandemic. Understandably, there was a large focus on vaccines and
+this study will investigate the effectiveness of these vaccines with
+regards to reducing severity of COVID and the transmission of cases. The
+objective of this study is to better understand how, throughout 2021,
+the vaccines effected the severity of COVID and the transmission of
+cases. The data was collected by Our World in Data in partnership with
+Oxford University and covers countries from each continent around the
+world. The responsibility of the reporting of the data fell to the
+individual nations.*
+
+### Objectives
+
+Analyse the following hypothesis:
+
+-   H1 - An increase in the number of people vaccinated will reduce the
+    number of deaths
+
+-   H2 - An increase in the number of people vaccinated will reduce the
+    severity of COVID
+
+-   H3 - An increase in the number of people vaccinated will not effect
+    the transmission of cases.
+
+```{r fix_data, include=FALSE, echo=FALSE, message=FALSE, comment="", warning=FALSE}
+d = d[,c(1:16, #Cases
+          18:21, #Hospitalization
+          35:47,  #Vaccines
+          49:50,54,56,61,63,  #POP
+          4       # Date
+          )]
+names(d)
+d$date.1[1]
+d$date.1 = as.Date(d$date.1, format = "%d-%m-%Y")
+#d %>%
+#  mutate(log_CASES.N = log(CASES.N+0.5),
+#         log_new_deaths = log(new_deaths+0.5)) %<%
+```
+
+### Define Variables for the study
+
+**Independent variables** (Standardized x hundred)
+
+-   Vaccination
+
+**Dependent variables** (Standardized x hundred)
+
+-   Cases
+-   Deaths
+-   Hospitalization
+-   ICU Hospitalization
+
+**Latent/control variables** (Standardized x hundred)
+
+-   Health indices (Hosp, beds, IDH)
+-   Development indicators (GDP, POP, POP Density)
+
+### Understanding the variables
+
+```{r explain, echo=FALSE, message=FALSE, comment="", warning=FALSE}
+d = d[,c(2,3,11,12,14,15,18,20,21,22,27,28,34,36,37,38,39,40)]    # Only the variables we want a study
+n = names(d)
+names(d)[1] = "CONT"
+names(d)[2] = "COUN"
+names(d)[3] = "CASES.T"
+names(d)[4] = "CASES.N"
+names(d)[5] = "DEATHS.T"
+names(d)[6] = "DEATHS.N"
+names(d)[7] = "ICU"
+names(d)[8] = "HOSP"
+names(d)[9] = "VAC.T"
+names(d)[10] = "PEOPLE.V"
+names(d)[11] = "VAC.p"
+names(d)[12] = "PEOPLE.V.p"
+names(d)[13] = "POP"
+names(d)[14] = "GDP.PC"
+names(d)[15] = "HEART.R"
+names(d)[16] = "BEDS"
+names(d)[17] = "HDI"
+names(d)[18] = "DATE"
+# d$DATE = as.Date(d$DATE, format = "%Y-%m-%d")
+cbind(names(d),n)
+```
+
+Firstly, the vaccinations appear to have little effect on the number of
+cases. With every increase in vaccination per 100 people, there is an
+increase of 0.55 cases. This suggests that the presence of a vaccine has
+encouraged societies to take less care and fast-tracked governments
+relaxation of the rules.
+
+Secondly, the reduction of ICU patients when vaccinations per hundred
+people increases is clear. With every increase in vaccination per 100
+people there is a 0.24 decrease in the number of ICU patients per
+million. This shows the vaccine is reducing the severity of COVID much
+more than the transmission of cases.
+
+Furthermore, the number of new deaths per million decreases with an
+increase in the number of vaccinations per 100 people by 0.08.
+Strengthening the idea that severity of COVID and, as a bi-product,
+deaths will be reduce as vaccine take up increased.
+
+From this we can settle on the following hypothesis:
+
+H1 - An increase in the number of people vaccinated will reduce the
+number of deaths
+
+H2 - An increase in the number of people vaccinated will reduce the
+severity of COVID
+
+H3 - An increase in the number of people vaccinated will not effect the
+transmission of cases.
+
+### Plots
+
+```{r plot2, echo=FALSE, message=FALSE, comment="", warning=FALSE}
+dES = filter(d, COUN == 'Spain')
+ay <- list(
+  tickfont = list(color = "red"),
+  overlaying = "y",
+  side = "right",
+  range = c(0,8000),
+  title = "Cases")
+fig = plot_ly(data = dES, x = ~DATE, y = ~DEATHS.N, type = 'scatter', mode = 'lines', name = "Deaths") %>%
+      add_trace(data = dES, x = ~DATE, y = ~CASES.N, type = 'scatter', mode = 'lines', name = "Cases", yaxis = "y2")
+fig %>%
+      layout(showlegend = T, title='Covid Evolution in Spain (per million of habitants)',
+              xperiod = "M4",
+              yaxis = list(range = c(0,30), title = "Deaths"),
+              yaxis2 = ay,
+              xaxis = list(rangeslider = list(visible = T),
+                        tick0 = "2000-01-15" ,dtick= "M4",
+                        rangeselector=list(
+                          buttons=list(
+                            list(count=1, label="1m", step="month", stepmode="backward"),
+                            list(count=6, label="6m", step="month", stepmode="backward"),
+                          list(count=1, label="YTD", step="year", stepmode="todate"),
+                          list(count=1, label="1y", step="year", stepmode="backward"),
+                          list(step="all")
+                        ))))
+
+```
+
+The above graph explains how the number of deaths acted across the
+period between May 2020 and January 2022 in Spain. It should be made
+clear that this is the number of New Deaths, not accumulative deaths,
+which explains the volatile nature of the data.
+
+```{r hist,  echo=FALSE, message=FALSE, comment="", warning=FALSE}
+par(mfrow = c(2,2))
+hist(d$CASES.N)
+hist(log(d$CASES.N))
+hist(d$PEOPLE.V)
+hist(log(d$PEOPLE.V))
+
+par(mfrow = c(2,2))
+hist(d$DEATHS.N)
+hist(log(d$DEATHS.N)) # We have negative deaths?? WTF 
+hist(d$VAC.T)
+hist(log(d$VAC.T))
+
+# Logs
+
+d$CASES.N = log(d$CASES.N+0.0001)
+d$DEATHS.N = log(d$DEATHS.N+0.0001)
+d$ICU = log(d$ICU+0.0001)
+d$HOSP = log(d$HOSP+0.0001)
+d$PEOPLE.V.p = log(d$PEOPLE.V.p+0.0001)
+
+```
+
+![](00002a.png)
+
+### Regressions
+
+-   Fixed Variables
+
+```{r reg2, echo=FALSE, message=FALSE, comment="", warning=FALSE}
+reg2 = lm(d$DEATHS.N ~ d$CASES.N + d$PEOPLE.V.p)
+summary(reg2)
+
+```
+
+Based on the above regression, where deaths are standardized per
+million, we have evidence to support hypothesis one. It would be
+expected that an increase in the number of cases would explain an
+increase in the number of deaths. However, as the number of vaccinations
+per hundred increases, it would be expected that the number of deaths
+should decrease. Here, we can interpret that for every increase in
+vaccinations per hundred a country gives, there will be a decrease of
+0.024 new deaths per million, supporting the notion that an increase in
+the number of vaccinations there are will represent a decrease in the
+number of deaths.
+
+We can also understand further that the effect of new deaths is
+relatively comparable across all CONTs, which leads us to believe there
+is less merit in exploring this relationship.
+
+-   **Spain**
+
+```{r ES, echo=FALSE, message=FALSE, comment="", warning=FALSE}
+ES = filter(d, COUN == 'Spain')  # Filter only Spain
+EU = filter(d, CONT == 'Europe')  # Filter only Europe
+lm_ES = lm(ES$DEATHS.N ~ ES$CASES.N +
+                          ES$HOSP +
+                          ES$ICU +
+                          ES$PEOPLE.V.p) 
+
+summary(lm_ES)   # Very good one!!!!.. but 277 df haha :,)
+
+```
+
+<!--# Change this comments: (because the lm() changed -->
+
+The regression above makes interesting reading. The number of people
+vaccinated per hundred in Spain is an extension of the previous analysis
+we witnessed in the Pairs Panel above, as vaccinations increase the
+number of deaths decrease. Interestingly, the total number of
+vaccinations per hundred people has increased the number of ICU patients
+per million. It is likely that this is a reflection on the booster doses
+that have been issued because they are unlikely to reduce the number of
+ICU patients per million, but instead maintain the level that the
+initial rounds of vaccine achieved.
+
+```{r ES1, echo=TRUE, message=FALSE, comment="", warning=FALSE}
+par(mfrow = c(1,2))
+plot(ES$ICU ~ ES$PEOPLE.V.p + ES$HOSP)
+```
+
+```{r ES_model, echo=FALSE, message=FALSE, comment="", warning=FALSE}
+model = "DEATHS.N ~ 1*ICU+
+          1*PEOPLE.V.p; 
+        HOSP ~ 1*CASES.N + 
+          1*PEOPLE.V.p;
+        CASES.N ~ PEOPLE.V.p"
+
+model2 = "DEATHS.N ~ 1*ICU+
+          1*HOSP +
+          1*CASES.N +
+          1*PEOPLE.V.p"
+
+fit = sem(model, data = ES)
+fit2 = sem(model2, data = ES)
+semPaths(fit,what="std",sizeMan=12,edge.label.cex=1.5,nCharNodes = 8,
+         curvature = 1, style="lisrel",weighted=TRUE)
+round(fitMeasures(fit)[c(3:5, 23)],4) # not sure whether it's a good model... 
+semPaths(fit2,what="std",sizeMan=12,edge.label.cex=1.5,nCharNodes = 8,
+         curvature = 3, style="lisrel",weighted=TRUE)
+round(fitMeasures(fit2)[c(3:5, 23)],4) 
+```
+
+As previously explained, there is a negative correlation between people
+vaccinated per hundred and the total number of ICU patients. This is
+best depicted in the graphs above. At the point of 0 vaccinations per
+hundred, there is close to 100 ICU patients per million. It should be
+noted that there were reports of Spanish hospitals being at capacity
+throughout the pandemic which suggests, without capacity constraints,
+these numbers may have been higher. As the number of people vaccinated
+increased, the number of ICU patients decreased.
+
+The graphs remain relatively volatile throughout the range of number of
+people vaccinated per hundred which can be interpreted to represent the
+evolving nature of the virus. The number of people vaccinated could be
+used as a proxy for time, as this number is only capable of increasing.
+Therefore the peaks on the graphs above are likely to represent the
+waves of the pandemic.
+
+## Model proposed by Albert
+
+For this model 4 latent variables were defined, Cases, Vaccination,
+Hospitalization and Deaths, all of them with measure indicators of the
+daily average per million on each quarter of: cases, vaccines,
+hospitalizations and deaths.
+
+The bivariate analysis shows correlations among the variables, initially
+there is not multidisciplinary detected meaning there is variation
+between variables and the periods.
+
+```{r 2data, echo=FALSE, message=FALSE, comment="", warning=FALSE}
+dd<-read_excel("C:/Users/danie/OneDrive - UPF-BSM/2. Second Term/Marketing Research/Final Case/Covidfinal.xlsx")
+names(dd)
+
+model56 = "#Latents
+              Ca =~ 1*log(Cases.NQ1) + 1*log(Cases.NQ2) + 1*log(Cases.NQ3)+ 1*log(Cases.NQ4);
+              Hos =~ 1*log(HospQ1) + 1*log(HospQ2) + 1*log(HospQ3) + 1*log(HospQ4);
+              Dea =~ 1*log(Deaths.NQ1) + 1*log(Deaths.NQ2) + 1*log(Deaths.NQ3) + 1*log(Deaths.NQ4);
+              Vac =~ 1*log(People.VQ1) + 1*log(People.VQ2) + 1*log(People.VQ3) + 1*log(People.VQ4); 
+            # Regressions
+              Dea ~ Ca + Hos + Vac;
+              Hos ~ Vac
+"
+          
+fit_56 <- sem(model56,data = dd)
+semPaths(fit_56,what="std",sizeMan=6,edge.label.cex=0.8,nCharNodes = 4,curvature = 2, style="lisrel",weighted=TRUE)
+round(fitMeasures(fit_56)[c(3:5, 23)],4)
+summary(fit_56)
+```
+
+In this model we see strong correlations between the latent variables
+Cases, Vaccinations, deaths and Hospitalization and their respective
+indicators of each quarter. Furthermore, we see that Vaccination has
+high negative beta regression coefficient (-3.30) against Deaths. This
+means that as expected the more vaccinations are executed the less
+deaths are expected. Also vaccinations have high negative beta
+regression coefficient (-1) with hospitalizations. Meaning vaccines are
+helping to decrease severe cases. Another feature is that Cases present
+a positive beta regression coefficient with deaths, meaning the more
+cases, more deaths are expected.
+
+Finally this model explains, with a high negative beta regression
+coefficient, that hospitalization decreases deaths. Principal assumption
+is that the higher the hospitalizations the less deaths will be
+produced, therefore countries should make high investments in hospitals
+to diminish covid severity.
+
+The disturbance Terms for Cases are 0.89, 0.44, 0.82 and 0.93 for
+Q1,Q2,Q3 & Q4, meaning there 11%,56%, 18% and 7% of the variances of
+each quarter is caused by variables not controlled. Disturbance are low
+probably because covid increases similarly among similar countries,
+therefore there are not many external variables that explain variations
+in new cases.
+
+The disturbance Terms for Vaccination are 0.8, 0.94, 0.96 and 0.95 for
+Q1,Q2,Q3 & Q4, meaning there 20%,16%, 4% and 5% of the variances of each
+quarter is caused by variables not controlled. The low disturbance terms
+is satisfactory for the model, for instance the amount of vaccination
+per millions applied for covid should not be caused by many external
+variables rather than the country. which in this case vaccines were
+distributed in the world considering the population of each country.
+
+However, Disturbance terms for Hospitalization seems to be higher, this
+is because not only hospitals capacity is very different from country to
+country but health investment and life style.
+
+This model presents some issues, the P value very low and the degrees of
+freedom are high, meaning it is not reliable. Further investigation
+needs to be done in order to find a more suitable model. Which is why
+modification indices were driven to find a better fit.
+
+It also important noticing that there are a lot of missing considering
+that some countries are not very accurate on their reporting abilities.
+
+```{r,  echo=FALSE, message=FALSE, comment="", warning=FALSE}
+hd1 = (dd$HospQ1 + dd$Deaths.NQ1)
+hd2 = (dd$HospQ2 + dd$Deaths.NQ2)
+hd3 = (dd$HospQ3 + dd$Deaths.NQ3)
+hd4 = (dd$HospQ4 + dd$Deaths.NQ4)
+
+dd$lc1 = log(dd$Cases.NQ1+1)
+dd$lc2 = log(dd$Cases.NQ2+1)
+dd$lc3 = log(dd$Cases.NQ3+1)
+dd$lc4 = log(dd$Cases.NQ4+1)
+dd$lh1 = log(dd$HospQ1+1)
+dd$lh2 = log(dd$HospQ2+1)
+dd$lh3 = log(dd$HospQ3+1)
+dd$lh4 = log(dd$HospQ4+1)
+dd$ld1 = log(dd$Deaths.NQ1+1)
+dd$ld2 = log(dd$Deaths.NQ2+1)
+dd$ld3 = log(dd$Deaths.NQ3+1)
+dd$ld4 = log(dd$Deaths.NQ4+1)
+dd$lv1 = log(dd$People.VQ1+1)
+dd$lv2 = log(dd$People.VQ2+1)
+dd$lv3 = log(dd$People.VQ3+1)
+dd$lv4 = log(dd$People.VQ4+1)
+
+library(VIM)
+aggr(data)
+
+names(dd)
+
+data <- dd[,c(46:49, 58:61,2,5)]
+names(data)
+
+
+modelAll = "#Latents
+              Ca =~ lc1 + lc2 + lc3+ lc4;
+              Vac =~ lv2 + lv3 + lv4; 
+            # Regressions
+              Ca ~ Vac;
+            # Correlations
+                lc1	~~	lc2
+                lc2	~~	lc4
+                lv2	~~	lv4
+                lv2	~~	lv3
+              # lv3	~~	lv4
+              # lc2	~~	lc3
+              # lc1	~~	lc3
+              # lc1	~~	lc4
+                lc3	~~	lc4
+"
+
+pairs.panels(data)
+
+fit_all <- sem(modelAll,data = data, missing = "fiml")
+
+summary(fit_all)
+
+semPaths(fit_all,what="std",sizeMan=6,edge.label.cex=0.8,nCharNodes = 4,curvature = 2, style="lisrel",weighted=TRUE, intercepts =FALSE)
+round(fitMeasures(fit_all)[c(3:5, 23)],4)
+head(modificationindices(fit_all, sort. = TRUE),5)
+```
+
+In contrast to previous models, the above model is not effected by the
+high numbers of missing data. Previously, the reporting of
+hospitalizations led us to have very high numbers of missings.
+
+The aggregation of missing data, as shown above, reflects the high level
+of missingness in quarter 1 of 2021. This is centered around the rate of
+vaccine roll out around the world and therefore has been left out of
+this model.
+
+The model shows us the effect of vaccination on cases. As previously
+mentioned, we did not expect the vaccine roll out to reduce the number
+of cases and thus the transmission of the virus. This is evident here as
+the estimate of the regression is 0.993. In context, this is likely to
+be explained by the Omicron variant. Furthermore, as vaccines were
+rolled out worldwide, governments were more lenient with restrictions,
+aware that this would increase the number of cases but confident that as
+the vaccines took hold the severity of COVID would reduce.
+
+With more reliable data, we could implement the aforementioned model in
+which latent variables were assigned to assess the severity of COVID and
+prove this hypothesis. Regrettably, without this data, this explanation
+will have to suffice.
+
+Whilst we still have some modification indices that are high, this is
+the limit of where we can introduce correlations between variables and
+still receive an output including standard errors. In the model, some of
+the correlations have been frozen, meaning they will not be included in
+the model but show where the desired correlations would be introduced if
+possible.
+
+```{r 333,  echo=FALSE, message=FALSE, comment="", warning=FALSE}
+data$lgdp = log(data$GDPQ1)
+data$lbed = log(data$BedsQ1)
+
+aggr(data)
+
+modelG = "#Latents
+              Ca =~ lc1 + lc2 + lc3+ lc4;
+            # Vac =~ lv2 + lv3 + lv4; 
+            # Regressions
+              Ca ~ lv2 + lv3 + lv4 + lbed + lgdp;
+            # Correlations
+               lc1	~~	lc2
+               lc2	~~	lc4
+              #lv2	~~	lv4
+              #lv2	~~	lv3
+               # lv3	~~	lv4
+               lc2	~~	lc3
+                #lc1	~~	lc3
+              # lc1	~~	lc4
+                #lc3	~~	lc4
+                #lc3	~~	lv4
+                #lc3	~~	lv3
+"
+
+fitG <- sem(modelG,data = data)
+
+summary(fitG)
+
+semPaths(fitG,what="std",sizeMan=6,edge.label.cex=0.8,nCharNodes = 4,curvature = 2, style="lisrel",weighted=FALSE, intercepts =FALSE)
+round(fitMeasures(fitG)[c(3:5, 23)],4)
+modificationindices(fitG, sort. = TRUE, power = TRUE)
+```
+
+Based on the above model, we can see the effect that the GDP of the
+country and the number of hospital beds per thousand has on the number
+of cases a country has. Focusing on the Path Diagram, we can see that
+there is a positive effect of both of these variables on the number of
+cases. Number of Hospital Beds and GDP act as proxy's for the level of
+development of the country, suggesting that countries that are more
+developed had more cases of COVID throughout the period analyzed.
+Initially this may seem counter-intuitive, however it is more likely to
+be a reflection of how effectively the countries reported the data.
+
+This model also suffers from missingness, although not to the same
+extent as the initial model, which suggests that there are reliability
+issues around how well the GDP and Hospital Beds were reported. As we
+can see from the aggregation of missingness analysis, the levels of
+missingness in Hospital Beds and GDP is relatively high.
+
+The modification indices of this model are very low, including the EPC
+column, which shows how much the model could change if the correlations
+were included. From the modification indices, we can conclude that the
+the effect of the rhs on the lhs is insignificant and would not have a
+great effect on the model if it were to be included.
+
+## Summary
+
+In summary, we have identified 3 Hypothesis relating to the
+effectiveness of the vaccines and proven Hypothesis 3, that increases in
+vaccinations in the population will not negatively effect the number of
+cases. Furthermore, we identified a model that looked to incorporate
+severity of COVID and number of deaths in to the equation to understand
+the vaccines effect of this. However, this study was hampered by
+missingness within the data.
+
+An opportunity for further research would be to collect a more complete
+data set to further analyze the effectiveness of the vaccines on
+severity of COVID and deaths.
